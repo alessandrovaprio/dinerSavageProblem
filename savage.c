@@ -24,7 +24,7 @@ void *cook(void *);
 static pthread_mutex_t servings_mutex;
 static pthread_mutex_t print_mutex;
 
-static int servings = 15;
+static int servings = 9;
 
 int getServingsFromPot(void)
 {
@@ -82,7 +82,7 @@ void *savage(void *id)
 {
   int savage_id = *(int *)id;
   int myServing;
-  int meals = 11;
+  int meals = 10;
 
   while (meals)
   {
@@ -104,7 +104,7 @@ void *savage(void *id)
     printf("Savage: %i is eating\n", savage_id);
     pthread_mutex_unlock(&print_mutex);
 
-    sleep(2);
+    //sleep(2);
 
     pthread_mutex_lock(&print_mutex);
     printf("Savage: %i is DONE eating\n", savage_id);
