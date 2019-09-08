@@ -31,18 +31,24 @@ static int numberOfFillPot = 0;
 static int cookHasRounds = 0;
 static int tmp_food = 0;
 static int notFinished=1;
-int getServingsFromPot(void)
+int getServingsFromPot(int savage_id)
 {
   int retVal;
 
   if (foods <= 0)
   {
-    // pthread_mutex_lock(&print_mutex);
-    // printf("invio empty pot ");
-    // pthread_mutex_unlock(&print_mutex);
+    
 
     // send to semaphore emptyPot
-    sem_post(&emptyPot);
+    int tmp_sem=0;
+    sem_getvalue(&emptyPot,&tmp_sem);
+    pthread_mutex_lock(&print_mutex);
+    printf("inviato da %i valore del semaphoro %d\n", savage_id,tmp_sem);
+    pthread_mutex_unlock(&print_mutex);
+    if (tmp_sem ==0){
+      sem_post(&emptyPot);
+      
+    }
     retVal = 0;
   }
   else
@@ -135,9 +141,9 @@ void *savage(void *id)
   pthread_mutex_lock(&servings_mutex);
   int tmp_foods = foods;
   pthread_mutex_unlock(&servings_mutex);
-  // pthread_mutex_lock(&print_mutex);
-  // printf("Savage: %i enter and servings is %i\n", savage_id, tmp_foods);
-  // pthread_mutex_unlock(&print_mutex);
+  pthread_mutex_lock(&print_mutex);
+  printf("Savage: %i enter and servings is %i\n", savage_id, tmp_foods);
+  pthread_mutex_unlock(&print_mutex);
   
   //cicle infinite loop
   while (tmp_rounds)
@@ -147,35 +153,38 @@ void *savage(void *id)
     tmp_foods= foods;
     //int tmp_rounds = rounds;
     pthread_mutex_unlock(&servings_mutex);
-    // pthread_mutex_lock(&print_mutex);
-    // printf("Savage: %i is inside loop is %i\n", savage_id, tmp_foods);
-    // pthread_mutex_unlock(&print_mutex);
-    if ((tmp_foods == -1))
+    pthread_mutex_lock(&print_mutex);
+    printf("Savage: %i is inside loop is %i\n", savage_id, tmp_foods);
+    pthread_mutex_unlock(&print_mutex);
+    if ((tmp_foods <= 0))
     {
       //lock the access of the foods variable
       pthread_mutex_lock(&servings_mutex);
-      myServing = getServingsFromPot();
+      myServing = getServingsFromPot(savage_id);
       //unlock the variable
       pthread_mutex_unlock(&servings_mutex);
       // check if food left is zero
-      if (myServing == 0)
-      {
+      // if (myServing == 0)
+      // {
         pthread_mutex_lock(&print_mutex);
         printf("\nsavage %i is waiting\n",savage_id);
         pthread_mutex_unlock(&print_mutex);
 
         //pthread_mutex_unlock(&servings_mutex);
         //wait until the pot is full again
+        // pthread_mutex_lock(&servings_mutex);
+        // getServingsFromPot();
+        // //unlock the variable
+        // pthread_mutex_unlock(&servings_mutex);
         sem_wait(&fullPot);
-        
-      }
+      // }
      
     }
     else{
       //if ((tmp_foods == foods)){
         // lock the acess to the shared variable foods
         pthread_mutex_lock(&servings_mutex);
-        myServing = getServingsFromPot();
+        myServing = getServingsFromPot(savage_id);
         pthread_mutex_unlock(&servings_mutex);
         // lock the cmd printing
         pthread_mutex_lock(&print_mutex);
@@ -222,6 +231,7 @@ int main(int argc, char *argv[])
     sem_init(&emptyPot, 0, 0);
     sem_init(&fullPot, 0, 0);
 
+    // pthread_create(&tid[num_savages], NULL, cook, (void *)&id[num_savages]);
     // create one thread for each savage
     for (i = 0; i < num_savages; i++)
     {
