@@ -89,19 +89,19 @@ void cook(int id)
   int tmp_sem=0, generalFood = tmp_food;
   sem_wait(mutex);
   printf("\n--------Cook is enter with %i\n\n", *ptrfood);
-  sem_wait(mutex);
+  sem_post(mutex);
   //ciclo all'infinito, escluse clausole di break
   while (1)
   {
-    sleep(1);
+    //sleep(1);
     // lock la variabile foods
     ////pthread_mutex_lock(&servings_mutex);
     //sem_wait(&emptyPot);
     sem_wait(mutex);
     
     int tmp = *ptrfood; // salvo la variabile foods in una temporanea
-    printf("cook - row 103 %d",tmp);
-    sem_wait(mutex);
+    printf("cook - row 103 %d");
+    sem_post(mutex);
     //unlock la variabile
     ////pthread_mutex_unlock(&servings_mutex);
     //controllo se e' rimasto cibo
@@ -227,7 +227,7 @@ void cook(int id)
 //void *savage(void *id)
 void savage(int id)
 {
-  sleep(2);
+  //sleep(2);
   printf("\nbefore wait row 208 \n");
   sem_wait(mutex);
   printf("\nwait row 208 \n"); 
@@ -354,7 +354,7 @@ int main(int argc, char *argv[])
     rounds = atoi(argv[3]);     // salvo il terzo parametro come numero del numero di volte che ogni singolo selvaggio dovra' mangiare
     notFinished=num_savages;    // inizializzo la variabile notFinished con il numero dei selvaggi. Questa varabile verra' decrementata ogni volta che un selvaggio completa i suoi giri
     int i, id[num_savages + 1], status, wpid; 
-    pthread_t tid[num_savages + 1]; //inizializzo un numero di thread pari al numero dei selvaggi + il cuoco
+     //inizializzo un numero di thread pari al numero dei selvaggi + il cuoco
     
     
     
