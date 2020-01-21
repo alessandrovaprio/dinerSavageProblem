@@ -71,7 +71,7 @@ int putServingsInPot(int num)
   //int savageLeft = notFinished;             /* inizializzo la variabile savageLeft uguale al numero di selvaggi che non hanno ancora completato tutti i giri*/
   //pthread_mutex_unlock(&savage_finish_mutex); /* sblocco la variabile savageLeft */
   //prima di riempire controllo che la pentola sia vuota e che ci siano ancora selvaggi che devono mangiare.
-  printf("before put in pot ");
+  printf("before put in pot %d",*ptrfood);
   if(*ptrfood<=0 && *ptrnotFinished>0){
 
     *ptrfood = num; /* la varibale foods diventa il numero di porzioni dichiarate in fase iniziale*/
@@ -87,8 +87,9 @@ int putServingsInPot(int num)
 void cook(int id)
 {
   int tmp_sem=0, generalFood = tmp_food;
-
+  sem_wait(mutex);
   printf("\n--------Cook is enter with %i\n\n", *ptrfood);
+  sem_wait(mutex);
   //ciclo all'infinito, escluse clausole di break
   while (1)
   {
@@ -99,7 +100,8 @@ void cook(int id)
     sem_wait(mutex);
     
     int tmp = *ptrfood; // salvo la variabile foods in una temporanea
-    sem_post(mutex);
+    printf("cook - row 103 %d",tmp);
+    sem_wait(mutex);
     //unlock la variabile
     ////pthread_mutex_unlock(&servings_mutex);
     //controllo se e' rimasto cibo
@@ -162,7 +164,8 @@ void cook(int id)
         ////pthread_mutex_lock(&print_mutex);
         printf("\n\nAll the savages have eaten, the cook can go home!!\n\n");
         ////pthread_mutex_unlock(&print_mutex);
-        return NULL;  /* esco dal ciclo, tutti i selvaggi hanno mangiato*/
+        //return NULL;  /* esco dal ciclo, tutti i selvaggi hanno mangiato*/
+        return;
       }
     }
     else{
@@ -212,13 +215,13 @@ void cook(int id)
           ////pthread_mutex_lock(&print_mutex);
           printf("\n\nAll the savages have eaten, the cook can go home\n\n");
           ////pthread_mutex_unlock(&print_mutex);
-          return NULL; // esce dal ciclo
+          //return NULL; // esce dal ciclo
         }
        
     }
   }
-
-  return NULL; //esce dal processo
+  exit(0);
+  //return NULL; //esce dal processo
 }
 
 //void *savage(void *id)
@@ -256,6 +259,7 @@ void savage(int id)
   ////pthread_mutex_lock(&servings_mutex);
   //salvo la variabile foods in una temporanea in modo da non averla valida per il contesto del singolo thread
   int tmp_foods = *ptrfood;
+  printf("row 261 %d",tmp_foods);
   ////pthread_mutex_unlock(&servings_mutex);
   int myServing = 0;
   printf("\nprima di while %i, savage %d\n",tmp_rounds,id);
@@ -273,6 +277,7 @@ void savage(int id)
     //pthread_mutex_lock(&servings_mutex);
     //sem_wait(&finishOperation);
     tmp_foods = *ptrfood; //inserisco nella variabile temporanea tmp_foods il valore attuale di foods
+    printf("cook - row 279 %d",tmp_foods);
     sem_post(mutex);
     printf("\nunlock wait row 245 \n");
     if ((tmp_foods <= 0)) // se non ci sono piu' porzioni 
@@ -334,8 +339,8 @@ void savage(int id)
   //pthread_mutex_unlock(&print_mutex);
 
   
-  return NULL; //esco dal processo
-  //exit(0);
+  //return NULL; //esco dal processo
+  exit(0);
 }
 
 int main(int argc, char *argv[]) 
@@ -462,6 +467,12 @@ int main(int argc, char *argv[])
         printf("The cook fill %d times the pot \n", numberOfFillPot);
         shmctl(shmid1, IPC_RMID, NULL);
         shmctl(shmid2, IPC_RMID, NULL);
+        shmctl(shmid3, IPC_RMID, NULL);
+        shmctl(shmid4, IPC_RMID, NULL);
+        shmctl(shmid5, IPC_RMID, NULL);
+        shmctl(shmid6, IPC_RMID, NULL);
+        shmctl(shmid7, IPC_RMID, NULL);
+        shmctl(shmid8, IPC_RMID, NULL);
 
       //sem_post(&emptyPot);
       //aspetto che il cuoco finisca
