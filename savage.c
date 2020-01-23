@@ -13,14 +13,10 @@ sem_t *emptyPot;
 sem_t *fullPot;
 sem_t *mutex;
 
-// void *savage(void *);
-// void *cook(void *);
 void cook();
 void savage(int id);
 
-// static //pthread_mutex_t servings_mutex;
-// static //pthread_mutex_t print_mutex;
-// static //pthread_mutex_t savage_finish_mutex;
+
 static int num_savages =0;
 static int foods = 0;
 static int rounds=0;
@@ -40,23 +36,20 @@ int getServingsFromPot(int savage_id)
 
   if (*ptrfood <= 0) /* se non è rimasto cibo */
   {
-    printf("food finished for savage %d \n",savage_id);
+    printf("cibo finito per il selvaggio %d \n",savage_id);
     // prende il valore del semaforo e lo salva nella variabile tmp_sem
-    int tmp_sem=0;
+    //int tmp_sem=0;
     //sem_getvalue(&emptyPot,&tmp_sem);
-
-    // se il semaforo ha il valore zero, allora invio il segnale al semaforo. In questo modo non invio segnali multipli al cuoco
-    //sem_post(&emptyPot);
     
     // ritorno il valore zero com cibo rimanente
     retVal = 0;
   }
   else /* se e' presente cibo decremento*/
   {
-    printf("food in pot %d \n",*ptrfood);
+    //printf("food in pot %d \n",*ptrfood);
     (*ptrfood)--; /* decremente la variabile food*/
     retVal = *ptrfood;
-    printf("food in pot retval%d \n",retVal);
+    //printf("food in pot retval%d \n",retVal);
   }
   //ritorno il cibo
   return retVal;
@@ -65,11 +58,8 @@ int getServingsFromPot(int savage_id)
 //riempe la pentola
 int putServingsInPot(int num)
 {
-  //pthread_mutex_lock(&savage_finish_mutex); /* faccio un lock della variabile savageLeft */
-  //int savageLeft = notFinished;             /* inizializzo la variabile savageLeft uguale al numero di selvaggi che non hanno ancora completato tutti i giri*/
-  //pthread_mutex_unlock(&savage_finish_mutex); /* sblocco la variabile savageLeft */
   //prima di riempire controllo che la pentola sia vuota e che ci siano ancora selvaggi che devono mangiare.
-  printf("before put in pot %d",*ptrfood);
+  //printf("before put in pot %d",*ptrfood);
   if(*ptrfood<=0 && *ptrnotFinished>0){
 
     *ptrfood = num; /* la varibale foods diventa il numero di porzioni dichiarate in fase iniziale*/
@@ -85,9 +75,9 @@ int putServingsInPot(int num)
 void cook()
 {
   int tmp_sem=0, generalFood = tmp_food;
-  sem_wait(mutex);
-  printf("\n--------Cook is enter with %i\n\n", *ptrfood);
-  sem_post(mutex);
+  // sem_wait(mutex);
+  // printf("\n--------Cook is enter with %i\n\n", *ptrfood);
+  // sem_post(mutex);
   //ciclo all'infinito, escluse clausole di break
   while (1)
   {
@@ -95,30 +85,28 @@ void cook()
     // lock la variabile foods
     ////pthread_mutex_lock(&servings_mutex);
     //sem_wait(&emptyPot);
-    sem_wait(mutex);
+    sem_wait(mutex); //entro nella sezione critica e aspetto per avere accesso esclusivo
     
     int tmp = *ptrfood; // salvo la variabile foods in una temporanea
-    printf("cook - row 103 %d");
-    sem_post(mutex);
-    //unlock la variabile
-    ////pthread_mutex_unlock(&servings_mutex);
+    sem_post(mutex); //rilascio zona critica
+    
     //controllo se e' rimasto cibo
     if(tmp>0){ // se e' rimasto cibo
 
       ////pthread_mutex_lock(&print_mutex);
-      sem_getvalue(emptyPot,&tmp_sem);
-      printf("\nCook is sleeping with sem %d \n\n",tmp_sem);
+      //sem_getvalue(emptyPot,&tmp_sem);
+      printf("\nCuoco sta dormento \n\n");
       //pthread_mutex_unlock(&print_mutex);
       //il cuoco si addormenta in attesa del segnale di riempimento
       sem_wait(emptyPot);
 
-      sem_wait(mutex);
-      printf("\nCook received signal %d food\n\n",tmp);
-      sem_getvalue(emptyPot,&tmp_sem);
-      printf("\nCook awake with sem %d \n\n",tmp_sem);
+      sem_wait(mutex); //aspetto di entrare nella zona critica
+      // printf("\nCook received signal %d food\n\n",tmp);
+      // sem_getvalue(emptyPot,&tmp_sem);
+      printf("\nCuoco è stato svegliato \n\n");
       ////pthread_mutex_lock(&savage_finish_mutex); //lock variabile notFinished
       int savageLeft = *ptrnotFinished; 
-      printf("\nCook see %d savage left\n\n",savageLeft);
+      //printf("\nCook see %d savage left\n\n",savageLeft);
       sem_post(mutex);               //inizializzo una variabile con il numero dei selvaggi che non hanno ancora finito i giri
       ////pthread_mutex_unlock(&savage_finish_mutex);
       if (savageLeft > 0) // se ancora ci sono selvaggi
@@ -126,30 +114,29 @@ void cook()
       
         ////pthread_mutex_lock(&servings_mutex); //lock della variabile foods
 
-        printf("\ncook - before wait row 121 \n");
+        //printf("\ncook - before wait row 121 \n");
         sem_wait(mutex);
-        printf("\ncook - wait row 121 \n");
-        printf("\ncook - general \n");
+        //printf("\ncook - wait row 121 \n");
+        //printf("\ncook - general \n");
         
         int hasAdded = putServingsInPot(generalFood); //chiamo la funzione per riempire la pentola passandogli il valore preso a riga di comando, salvo se effetivamente il cuoco ha aggiunto le porzioni
         sem_post(mutex);
-        printf("\ncook - unlock wait row 121 \n");
+        //printf("\ncook - unlock wait row 121 \n");
         
         //se il cuoco ha aggiunto porzioni alla pentola
         if(hasAdded == 1){
           //scrivo messaggio che il cuoco ha riempito la pentola
           ////pthread_mutex_lock(&print_mutex);
-          printf("\nCook he was woken up and filled pot\n\n");
+          //printf("\nCook ha riempito la pentola\n\n");
           ////pthread_mutex_unlock(&print_mutex); //sblocco la variabile foods
 
           numberOfFillPot++; // incremento il contatore che conta le volte di riempimento
-          //for (int i = 1; i < num_savages; i++) //invio il segnale al semaforo di riempiemnto per ogni selvaggio
-            sem_post(fullPot);
+          sem_post(fullPot);
 
         }else //altrimenti stampo il messaggio che il cuoco non ha fatto nulla
         {
          // //pthread_mutex_lock(&print_mutex);
-          printf("\nCook do nothing\n");
+          printf("\nCuoco non fa nulla\n");
           ////pthread_mutex_unlock(&print_mutex);
         }
         ////pthread_mutex_unlock(&servings_mutex); // sblocco la variabile foods
@@ -160,7 +147,7 @@ void cook()
       }
       else{
         ////pthread_mutex_lock(&print_mutex);
-        printf("\n\nAll the savages have eaten, the cook can go home!!\n\n");
+        printf("\n\nTutti i selvaggi hanno mangiato, il cuoco può andare a casa!!\n\n");
         ////pthread_mutex_unlock(&print_mutex);
         //return NULL;  /* esco dal ciclo, tutti i selvaggi hanno mangiato*/
         return;
@@ -169,51 +156,35 @@ void cook()
     else{
        ////pthread_mutex_lock(&savage_finish_mutex);
        sem_wait(mutex);
-       int savageLeft = *ptrnotFinished; 
-       sem_post(mutex);               // inizializzo una variaible col numero dei selvaggi che ancora devono finire il giro
+       int savageLeft = *ptrnotFinished; // inizializzo una variaible col numero dei selvaggi che ancora devono finire il giro 
+       sem_post(mutex);               
        ////pthread_mutex_unlock(&savage_finish_mutex);
        
        if(savageLeft>0){ // controllo se ci sono ancora selvaggi che devono finire il giro
 
           ////pthread_mutex_lock(&servings_mutex); //lock variabile foods 
-          printf("\ncook - before wait row 162 \n");
-          sem_wait(mutex);
-          printf("\ncook - wait row 162 \n");
+          
+          sem_wait(mutex); //aspetto per entrare nella sezione critica
           int hasAdded = putServingsInPot(generalFood); // riempio la pentola e inserisco nella variabile hasAdded se ha inserito porzioni nella pentola
-          ////pthread_mutex_unlock(&servings_mutex);
-          sem_post(mutex);
-          printf("\ncook - unlock wait row 162 \n");
+          sem_post(mutex); //rilascio sezione critica
 
           if (hasAdded > 0){ //se il cuoco ha aggiunto porzioni
             ////pthread_mutex_lock(&print_mutex); //lock the console printing
-            printf("\nCook see no more food, he cooks and filled pot\n\n");
+            printf("\nil cuoco vede pentola vuota, cucina e la riempie\n\n");
             ////pthread_mutex_unlock(&print_mutex);
             numberOfFillPot++; // incremento le volte in cui la pentola e' stata riempita
-            //for (int i = 1; i < num_savages; i++) //mando il segnale al semaforo fullPot ad ogni selvaggio
-              sem_post(fullPot);
+            
+            sem_post(fullPot); //segnalo ai selvaggi che aspettano che la pentola è di nuovo piena
               //sleep(3);
           }else{ /* altrimenti il cuoco non fa nulla e lo stampo a video*/
-            ////pthread_mutex_lock(&print_mutex);
-            printf("\nCook do nothing\n");
-            ////pthread_mutex_unlock(&print_mutex);
+            printf("\nIl cuoco non fa nulla\n");
           }
 
           //sleep(1);
-          //unlock the semaphore for each savage
-          
-
-           ////pthread_mutex_lock(&print_mutex);
-           printf("\n 2 Cook is sleeping\n\n");
-           ////pthread_mutex_unlock(&print_mutex);
-           // il cuoco aspetta il segnale di pentola vuota
-           //sem_wait(&emptyPot);
         }  
         else // se non ci sono selvaggi che devono ancora mangiare il cuoco puo' terminare
         {
-          ////pthread_mutex_lock(&print_mutex);
-          printf("\n\nAll the savages have eaten, the cook can go home\n\n");
-          ////pthread_mutex_unlock(&print_mutex);
-          //return NULL; // esce dal ciclo
+          printf("\n\nTutti i selvaggi hanno mangiato, il cuoco può andare a casa\n\n"); 
         }
        
     }
@@ -378,7 +349,6 @@ int main(int argc, char *argv[])
         
       }
       if(tmp_num_Savages == num_savages){
-        printf("\nTutti i selvaggi hanno mangiato, lo comunico al cuoco\n");
         sem_post(emptyPot);
 
       }
