@@ -7,28 +7,105 @@
 //#include <sys/sem.h>
 #include <sys/shm.h>
 
-#define NUM_SAVAGES 3
+#define NUM_selvaggioS 3
 
-sem_t *emptyPot;
-sem_t *fullPot;
+sem_t *pentolaVuota;
+sem_t *pentolaPiena;
 sem_t *mutex;
 
-void cook();
-void savage(int id);
+void cuoco();
+void selvaggio(int id);
 
 
-static int num_savages =0;
-static int foods = 0;
+static int num_selvaggios =0;
+static int porzioni = 0;
 static int rounds=0;
 //static int myServing = 0;
-static int numberOfFillPot = 0;
-static int cookHasRounds = 0;
+static int numRiempPentola = 0;
+static int cuocoHasRounds = 0;
 static int tmp_food = 0;
 static int notFinished=1;
-static int *ptrfood, *ptrrounds, *ptrnotFinished;
+static int *ptrfood, *ptrrounds, *prtnonFinito;
 static int shmid2, shmid1, shmid3, shmid4, shmid5,shmid6,shmid7,shmid8;
+
+//void *selvaggio(void *id)
+void selvaggio(int id)
+{
+  printf("selvaggio %d",0);
+  int selvaggio_id = id;
+  int tmp_rounds = rounds;
+  sem_wait(mutex); //entro zona critica
+  
+  //dichiaro la variabile tmp_rounds che mi servira' per sapere quante volte il selvaggio deve mangiare
+
+  //salvo la variabile porzioni in una temporanea in modo da non averla valida per il contesto del singolo processo
+  int tmp_porzioni = *ptrfood;
+  
+  int myServing = 0;
+
+  sem_post(mutex);  //rilascio zona critica
+  //ciclo per il numero di volte in cui ogni selvaggio deve mangiare
+  while (tmp_rounds)
+  {
+    sem_wait(mutex);
+    
+    tmp_porzioni = *ptrfood; //inserisco nella variabile temporanea tmp_porzioni il valore attuale di porzioni
+    
+    sem_post(mutex); //rilascio zona critica
+    
+    if ((tmp_porzioni <= 0)) // se non ci sono piu' porzioni 
+    {
+      printf("\nnon ci sono porzioni\n");
+      sem_wait(mutex);
+      
+      //prendiPorzioneDaPentola(selvaggio_id); // cerca di prendere porzioni ma la funzione mandera' il segnale di pentolaVuota
+      printf("\nil selvaggio %i chiama il cuoco e aspetta\n", selvaggio_id);
+      
+      sem_post(mutex); //rilascio zona critica
+      
+      int tmp_sem=0;
+      // sem_getvalue(pentolaVuota,&tmp_sem);
+      // printf("\nsvage %d before send empty pot to cuoco sem %d\n",selvaggio_id,tmp_sem);
+      // sem_getvalue(pentolaVuota,&tmp_sem);
+      // printf("\nselvaggio %d sended empty pot to cuoco sem %d\n",selvaggio_id,tmp_sem);
+      //sleep(3);
+      sem_post(pentolaVuota);
+      sem_wait(pentolaPiena);  // aspetto che il cuoco dia il segnale di pentola riempita
+
+     
+    }
+    else{ // se ci sono porzioni
+      
+      //printf("\n selvaggio %d ci sono porzioni\n",selvaggio_id);
+      sem_wait(mutex); //entro zona critica 
+      //printf("\n selvaggio %d wait row 275 \n",selvaggio_id);
+      myServing = prendiPorzioneDaPentola(selvaggio_id); //chiamo la funzione per prendere una porzione dalla pentola e salvo il cibo rimanente per poi stamparlo
+      sem_post(mutex);
+      //printf("\n selvaggio %d unlock wait row 275 \n",selvaggio_id);
+      // lock il console printing
+     
+      printf("Selvaggio %i sta mangiando, porzioni rimaste in pentola %i\n", selvaggio_id, myServing); // indico informazioni sul cibo rimasto e che stia effettivamente mangiando
+      printf("Selvaggio %i ha mangiato\n", selvaggio_id);
+     
+     
+
+      tmp_rounds--; //decremento la varibaile in modo da avere in ciclo finito
+      
+    }
+    //sem_post(&finishOperation);
+  }
+  
+  //pthread_mutex_lock(&selvaggio_finish_mutex); // blocco la variabile notFinished
+  sem_wait(mutex);
+  (*prtnonFinito)--;  //decremento variabile che tiene conto dei selvaggi che devono ancora mangiare
+  printf("...Selvaggio: %i esce, rimanenti...\n", selvaggio_id,*prtnonFinito);
+  sem_post(mutex);                          
+ 
+  exit(0);
+}
+
 // prendo una porzione di cibo dalla pentola
-int getServingsFromPot(int savage_id)
+int prendiPorzioneDaPentola(int selvaggio_id)
 {
   int retVal;
 
@@ -36,7 +113,7 @@ int getServingsFromPot(int savage_id)
 
   if (*ptrfood <= 0) /* se non è rimasto cibo */
   {
-    printf("cibo finito per il selvaggio %d \n",savage_id);
+    printf("cibo finito per il selvaggio %d \n",selvaggio_id);
     // prende il valore del semaforo e lo salva nella variabile tmp_sem
     
     // ritorno il valore zero com cibo rimanente
@@ -51,64 +128,45 @@ int getServingsFromPot(int savage_id)
   return retVal;
 }
 
-//riempe la pentola
-int putServingsInPot(int num)
-{
-  //prima di riempire controllo che la pentola sia vuota e che ci siano ancora selvaggi che devono mangiare.
-  //printf("before put in pot %d",*ptrfood);
-  if(*ptrfood<=0 && *ptrnotFinished>0){
-
-    *ptrfood = num; /* la varibale foods diventa il numero di porzioni dichiarate in fase iniziale*/
-
-    }else{
-    return 0; // ritorno zero se il cuoco non ha aggiunto cibo
-  }
-
-  return 1; // ritorno 1 se il cuoco ha aggiunto cibo
-}
-
-//void *cook(void *id) // processo del cuoco
-void cook()
+//void *cuoco(void *id) // processo del cuoco
+void cuoco()
 {
   int tmp_sem=0, generalFood = tmp_food;
   //ciclo all'infinito, escluse clausole di break
   while (1)
   {
-    //sleep(1);
-    // lock la variabile foods
-    ////pthread_mutex_lock(&servings_mutex);
-    //sem_wait(&emptyPot);
+    
     sem_wait(mutex); //entro nella sezione critica e aspetto per avere accesso esclusivo
     
-    int tmp = *ptrfood; // salvo la variabile foods in una temporanea
-    sem_post(mutex); //rilascio zona critica
+    int tmp = *ptrfood; // salvo la variabile porzioni in una temporanea
+     
     
     //controllo se e' rimasto cibo
     if(tmp>0){ // se e' rimasto cibo
-
+      sem_post(mutex); //rilascio zona critica
       printf("\nCuoco sta dormento \n\n");
       //il cuoco si addormenta in attesa del segnale di riempimento
-      sem_wait(emptyPot);
+      sem_wait(pentolaVuota);
 
       sem_wait(mutex); //aspetto di entrare nella zona critica
       printf("\nCuoco è stato svegliato \n\n");
-      int savageLeft = *ptrnotFinished; 
-      sem_post(mutex);               //inizializzo una variabile con il numero dei selvaggi che non hanno ancora finito i giri
-      if (savageLeft > 0) // se ancora ci sono selvaggi
+      int selvaggioLeft = *prtnonFinito; 
+                   //inizializzo una variabile con il numero dei selvaggi che non hanno ancora finito i giri
+      if (selvaggioLeft > 0) // se ancora ci sono selvaggi
       {
       
-        ////pthread_mutex_lock(&servings_mutex); //lock della variabile foods
+        ////pthread_mutex_lock(&servings_mutex); //lock della variabile porzioni
 
-        sem_wait(mutex);
         
-        int hasAdded = putServingsInPot(generalFood); //chiamo la funzione per riempire la pentola passandogli il valore preso a riga di comando, salvo se effetivamente il cuoco ha aggiunto le porzioni
-        sem_post(mutex);
+        
+        int haAggiunto = mettiPorzioniInPentola(generalFood); //chiamo la funzione per riempire la pentola passandogli il valore preso a riga di comando, salvo se effetivamente il cuoco ha aggiunto le porzioni
+      
         
         //se il cuoco ha aggiunto porzioni alla pentola
-        if(hasAdded == 1){
+        if(haAggiunto == 1){
 
-          numberOfFillPot++; // incremento il contatore che conta le volte di riempimento
-          sem_post(fullPot);
+          numRiempPentola++; // incremento il contatore che conta le volte di riempimento
+          sem_post(pentolaPiena);
 
         }else //altrimenti stampo il messaggio che il cuoco non ha fatto nulla
         {
@@ -117,30 +175,31 @@ void cook()
         
         
         //sleep(1);
-        
+        sem_post(mutex);  
       }
       else{
+        sem_post(mutex);  
         printf("\n\nTutti i selvaggi hanno mangiato, il cuoco può andare a casa!!\n\n");
         return;
       }
     }
     else{
-       sem_wait(mutex);
-       int savageLeft = *ptrnotFinished; // inizializzo una variaible col numero dei selvaggi che ancora devono finire il giro 
+       
+       int selvaggioLeft = *prtnonFinito; // inizializzo una variaible col numero dei selvaggi che ancora devono finire il giro 
        sem_post(mutex);               
        
-       if(savageLeft>0){ // controllo se ci sono ancora selvaggi che devono finire il giro
+       if(selvaggioLeft>0){ // controllo se ci sono ancora selvaggi che devono finire il giro
 
           
           sem_wait(mutex); //aspetto per entrare nella sezione critica
-          int hasAdded = putServingsInPot(generalFood); // riempio la pentola e inserisco nella variabile hasAdded se ha inserito porzioni nella pentola
+          int haAggiunto = mettiPorzioniInPentola(generalFood); // riempio la pentola e inserisco nella variabile haAggiunto se ha inserito porzioni nella pentola
           sem_post(mutex); //rilascio sezione critica
 
-          if (hasAdded > 0){ //se il cuoco ha aggiunto porzioni
+          if (haAggiunto > 0){ //se il cuoco ha aggiunto porzioni
             printf("\nil cuoco vede pentola vuota, cucina e la riempie\n\n");
-            numberOfFillPot++; // incremento le volte in cui la pentola e' stata riempita
+            numRiempPentola++; // incremento le volte in cui la pentola e' stata riempita
             
-            sem_post(fullPot); //segnalo ai selvaggi che aspettano che la pentola è di nuovo piena
+            sem_post(pentolaPiena); //segnalo ai selvaggi che aspettano che la pentola è di nuovo piena
               //sleep(3);
           }else{ /* altrimenti il cuoco non fa nulla e lo stampo a video*/
             printf("\nIl cuoco non fa nulla\n");
@@ -159,135 +218,89 @@ void cook()
   //return NULL; //esce dal processo
 }
 
-//void *savage(void *id)
-void savage(int id)
+//riempe la pentola
+int mettiPorzioniInPentola(int num)
 {
-  
-  sem_wait(mutex); //entro zona critica
-  int savage_id = id;
-  
-  //dichiaro la variabile tmp_rounds che mi servira' per sapere quante volte il selvaggio deve mangiare
-  int tmp_rounds = *ptrrounds;
+  //prima di riempire controllo che la pentola sia vuota e che ci siano ancora selvaggi che devono mangiare.
+  //printf("before put in pot %d",*ptrfood);
+  if(*ptrfood<=0 && *prtnonFinito>0){
 
-  //salvo la variabile foods in una temporanea in modo da non averla valida per il contesto del singolo processo
-  int tmp_foods = *ptrfood;
-  
-  int myServing = 0;
+    *ptrfood = num; /* la varibale porzioni diventa il numero di porzioni dichiarate in fase iniziale*/
 
-  sem_post(mutex);  //rilascio zona critica
-  //ciclo per il numero di volte in cui ogni selvaggio deve mangiare
-  while (tmp_rounds)
-  {
-    sem_wait(mutex);
-    
-    tmp_foods = *ptrfood; //inserisco nella variabile temporanea tmp_foods il valore attuale di foods
-    
-    sem_post(mutex); //rilascio zona critica
-    
-    if ((tmp_foods <= 0)) // se non ci sono piu' porzioni 
-    {
-      printf("\nnon ci sono porzioni\n");
-      sem_wait(mutex);
-      
-      //getServingsFromPot(savage_id); // cerca di prendere porzioni ma la funzione mandera' il segnale di emptyPot
-      printf("\nil selvaggio %i chiama il cuoco e aspetta\n", savage_id);
-      
-      sem_post(mutex); //rilascio zona critica
-      
-      int tmp_sem=0;
-      // sem_getvalue(emptyPot,&tmp_sem);
-      // printf("\nsvage %d before send empty pot to cook sem %d\n",savage_id,tmp_sem);
-      // sem_getvalue(emptyPot,&tmp_sem);
-      // printf("\nsavage %d sended empty pot to cook sem %d\n",savage_id,tmp_sem);
-      //sleep(3);
-      sem_post(emptyPot);
-      sem_wait(fullPot);  // aspetto che il cuoco dia il segnale di pentola riempita
-
-     
-    }
-    else{ // se ci sono porzioni
-      
-      //printf("\n savage %d ci sono porzioni\n",savage_id);
-      sem_wait(mutex); //entro zona critica 
-      //printf("\n savage %d wait row 275 \n",savage_id);
-      myServing = getServingsFromPot(savage_id); //chiamo la funzione per prendere una porzione dalla pentola e salvo il cibo rimanente per poi stamparlo
-      sem_post(mutex);
-      //printf("\n savage %d unlock wait row 275 \n",savage_id);
-      // lock il console printing
-     
-      printf("Selvaggio %i sta mangiando, porzioni rimaste in pentola %i\n", savage_id, myServing); // indico informazioni sul cibo rimasto e che stia effettivamente mangiando
-      printf("Selvaggio %i ha mangiato\n", savage_id);
-     
-     
-
-      tmp_rounds--; //decremento la varibaile in modo da avere in ciclo finito
-      
-    }
-    //sem_post(&finishOperation);
+    }else{
+    return 0; // ritorno zero se il cuoco non ha aggiunto cibo
   }
-  
-  //pthread_mutex_lock(&savage_finish_mutex); // blocco la variabile notFinished
-  sem_wait(mutex);
-  (*ptrnotFinished)--;  //decremento variabile che tiene conto dei selvaggi che devono ancora mangiare
-  printf("...Selvaggio: %i esce, rimanenti...\n", savage_id,*ptrnotFinished);
-  sem_post(mutex);                          
- 
-  exit(0);
+
+  return 1; // ritorno 1 se il cuoco ha aggiunto cibo
 }
+
+
+
+
 
 int main(int argc, char *argv[]) 
 {
   
   if (argc == 4) //controllo che il numero di parametri sia 4
   {
-    num_savages=atoi(argv[1]);  // salvo il primo parametro come numero di selvaggi
+    num_selvaggios=atoi(argv[1]);  // salvo il primo parametro come numero di selvaggi
     tmp_food = atoi(argv[2]);   // salvo il secondo parametro come numero porzioni disponibili, verra' usata per riempire la pentola dal cuoco
-    foods= tmp_food;            // salvo la variabile condivisa foods con il valore di tmp_food
+    porzioni= tmp_food;            // salvo la variabile condivisa porzioni con il valore di tmp_food
     rounds = atoi(argv[3]);     // salvo il terzo parametro come numero del numero di volte che ogni singolo selvaggio dovra' mangiare
-    notFinished=num_savages;    // inizializzo la variabile notFinished con il numero dei selvaggi. Questa varabile verra' decrementata ogni volta che un selvaggio completa i suoi giri
-    int i, id[num_savages + 1], status, wpid; 
+    notFinished=num_selvaggios;    // inizializzo la variabile notFinished con il numero dei selvaggi. Questa varabile verra' decrementata ogni volta che un selvaggio completa i suoi giri
+    int i, id[num_selvaggios + 1], status, wpid; 
      
         
     /* alloca memoria condivisa per un array di 100 interi e uno di 100 caratteri */
 
-    shmid1 = shmget(IPC_PRIVATE, 100 * sizeof(int), 0600);
+    shmid1 = shmget(IPC_PRIVATE, 1 * sizeof(int), 0600);
     if (shmid1 == -1)
       perror("Creazione memoria condivisa");
 
-    shmid2 = shmget(IPC_PRIVATE, 100 * sizeof(int), 0600);
-    if (shmid2 == -1)
-      perror("Creazione memoria condivisa");
+    ptrfood = (int *)shmat(shmid1, NULL, 0);
 
-    shmid3 = shmget(IPC_PRIVATE, 100 * sizeof(int), 0600);
+    shmid2 = shmget(IPC_PRIVATE, 1 * sizeof(int), 0600);
     if (shmid3 == -1)
       perror("Creazione memoria condivisa");
+
+    shmid3 = shmget(IPC_PRIVATE, 1 * sizeof(int), 0600);
+    if (shmid3 == -1)
+      perror("Creazione memoria condivisa");
+
+    prtnonFinito = (int *)shmat(shmid3, NULL, 0);
+
 
     shmid6 = shmget(IPC_PRIVATE, sizeof ( sem_t ), 0666);
     if (shmid6 == -1)
       perror("Creazione memoria condivisa");
 
+    pentolaVuota = ( sem_t *) shmat ( shmid6 ,( void *) 0, 0) ;
+
     shmid7 = shmget(IPC_PRIVATE, sizeof ( sem_t ), 0666);
     if (shmid7 == -1)
       perror("Creazione memoria condivisa");
+
+    pentolaPiena = ( sem_t *) shmat ( shmid7 ,( void *) 0, 0) ;
 
     shmid8 = shmget(IPC_PRIVATE, sizeof ( sem_t ), 0666);
     if (shmid8 == -1)
       perror("Creazione memoria condivisa");
 
-    ptrfood = (int *)shmat(shmid1, NULL, 0);
-    ptrrounds = (int *)shmat(shmid2, NULL, 0);
-    ptrnotFinished = (int *)shmat(shmid3, NULL, 0);
-    emptyPot = ( sem_t *) shmat ( shmid6 ,( void *) 0, 0) ;
-    fullPot = ( sem_t *) shmat ( shmid7 ,( void *) 0, 0) ;
+    
     mutex = ( sem_t *) shmat ( shmid8 ,( void *) 0, 0) ;
+    
+    //ptrrounds = (int *)shmat(shmid2, NULL, 0);
+    
 
-    *ptrfood = foods;
-    *ptrrounds = rounds;
-    *ptrnotFinished = notFinished;
+    
+
+    *ptrfood = porzioni;
+    //*ptrrounds = rounds;
+    *prtnonFinito = notFinished;
 
     // inizializzo i semafori condivisi () secondo parametro a 1)
-    sem_init(emptyPot, 1, 0);
-    sem_init(fullPot, 1, 0);
+    sem_init(pentolaVuota, 1, 0);
+    sem_init(pentolaPiena, 1, 0);
     sem_init(mutex, 1, 1); 
 
     
@@ -295,37 +308,36 @@ int main(int argc, char *argv[])
     if (cpid == 0)
     {
       int pid;
-      int tmp_num_Savages = 0;
-      for (i = 0; i < num_savages; i++)
+      int tmp_num_selvaggios = 0;
+      for (i = 0; i < num_selvaggios; i++)
       {
         pid=fork(); //creo un processo per ogni selvaggio
         if(pid==0){
-          savage(i);
+          selvaggio(i);
         }else{
-          //printf("\nAspetto %d ,food %d\n", i,foods);
+          //printf("\nAspetto %d ,food %d\n", i,porzioni);
           pid = wait(0);
-          //printf("\nAspettato %d, food %d\n", i,foods);
-          tmp_num_Savages++;
+          //printf("\nAspettato %d, food %d\n", i,porzioni);
+          tmp_num_selvaggios++;
         }
         
       }
-      if(tmp_num_Savages == num_savages){
-        sem_post(emptyPot);
+      if(tmp_num_selvaggios == num_selvaggios){
+        sem_post(pentolaVuota);
 
       }
       // exit(0);
     }
     else
     {
-        cook();
+        cuoco();
       
         printf("\nCibo avanzato %d \n", *ptrfood);
-        printf("Il cuoco ha riempito %d volte la pentola \n", numberOfFillPot);
-        sem_destroy(emptyPot); 
-        sem_destroy(fullPot);
+        printf("Il cuoco ha riempito %d volte la pentola \n", numRiempPentola);
+        sem_destroy(pentolaVuota); 
+        sem_destroy(pentolaPiena);
         sem_destroy(mutex); 
         shmctl(shmid1, IPC_RMID, NULL);
-        shmctl(shmid2, IPC_RMID, NULL);
         shmctl(shmid3, IPC_RMID, NULL);
         shmctl(shmid6, IPC_RMID, NULL);
         shmctl(shmid7, IPC_RMID, NULL);
@@ -341,6 +353,6 @@ int main(int argc, char *argv[])
     }
   else //se i parametri non sono corretti stampo un errore
   {
-    printf("Incorrect numbers of paramters. 3 params needed: Number of savages, Number of Portions and Number of Rounds \n");
+    printf("Incorrect numbers of paramters. 3 params needed: Number of selvaggios, Number of Portions and Number of Rounds \n");
   }
 }
